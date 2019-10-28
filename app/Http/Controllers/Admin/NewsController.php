@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Auth;
 
 // 以下を追記することでNews Modelが扱えるようになる
 use App\News;
+use App\History;
+use Carbon\Carbon;
 
 class NewsController extends Controller
 {
@@ -28,7 +30,7 @@ class NewsController extends Controller
       $news = new News;
       
     // 送信されてきたフォームデータを格納する
-      $news_form = $request->all();
+      $form = $request->all();
     
     // フォームから画像が送信されてきたら、保存して、$news->image_path に画像のパスを保存する
     if ($form['image']) {
@@ -45,6 +47,7 @@ class NewsController extends Controller
     
     // データベースに保存する
     $news->fill($form);
+    $news->user_id = Auth::id();
     $news->save();
     
     return redirect('admin/news/create');
@@ -65,16 +68,9 @@ class NewsController extends Controller
   
   public function edit(Request $request)
   {
-      // Validationをかける
-      $this->validate($request, News::$rules);
       
       // News Modelからデータを取得する
       $news = News::find($request->id);
-      unset($news_form['_token']);
-      
-      $news->fill($news_form)->save();
-      
-      return redirect('admin/news/');
       
       return view('admin.news.edit', ['news_form' => $news]);
   }
@@ -88,10 +84,27 @@ class NewsController extends Controller
       $news = News::find($request->id);
       // 送信されてきたフォームデータを格納する
       $news_form = $request->all();
+      
+      if ($request->remove == 'true') {
+            $news_form['image_path'] = null;
+      } elseif ($request->file('image')) {
+          $path = $request->file('image')->store('public/image');
+          $news_form['image_path'] = basename($path);
+      } else {
+          $news_form['image_path'] = $news->image_path;
+      }
+      
       unset($news_form['_token']);
+      unset($news_form['image']);
+      unset($news_form['remove']);
 
       // 該当するデータを上書きして保存する
       $news->fill($news_form)->save();
+
+      $history = new History;
+      $history->news_id = $news->id;
+      $history->edited_at = Carbon::now();
+      $history->save();
 
       return redirect('admin/news/');
   }
